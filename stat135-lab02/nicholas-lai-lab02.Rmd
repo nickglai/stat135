@@ -1,0 +1,206 @@
+---
+title: "Lab 2 - Palindromes in the Cytomegalovirus DNA"
+subtitle: "Stat 135"
+author: "Nicholas Lai"
+date: "March 18, 2018"
+output: pdf_document
+---
+
+#Introduction
+
+Palindromes in the Herpes family of viruses are of interest to biologists looking to fight disease, as their locations mark potential replication sites. These sites are a vital object of study, as the prevention of viral reproduction represents a promising avenue to curing conditions caused by the spread of these viruses.
+
+Searching for these sites without any information about where they might be located would be time consuming and expensive. Statistical analysis of the distribution of palindrome sites may yield clues to narrow the search. Biologists conjecture that sites of replication in the CMV are characterized by an unnaturally dense cluster of palindromes, so finding this cluster is the problem that this memo will presently address.
+
+#Methodology
+
+##Definitions
+
+Define a palindrome to be a strand of base pairs of at least length 10 such that one side's complementary strand is the strand in reverse and vice versa. Any shorter strands are disregarded, as they arise through chance too often.
+
+The CMV DNA strand is 229354 letters long.
+
+##Data
+
+The data we have are the locations of palindromes as defined previously in the CMV DNA. There are 296 Palindromes in total in the data, indexed by their starting locations
+```{r, echo=FALSE, message=FALSE}
+library(readr)
+library(knitr)
+library(dplyr)
+library(ggplot2)
+dat <- read_csv("hcmv.data")
+```
+
+##Theory
+
+The pressing question of this project is this: does knowledge of the distribution of the location of the palindromes give us any information about where the replication site may be?
+
+In nature, many rare processes can be modeled by the Poisson distribution (The Law of Rare Events). The appearance of palindromes in the CMV DNA is rare, with only 296 as defined being present in 229354 locations, so this is a natural model for their distribution.
+
+The Poisson distribution takes one parameter, the rate of the process. This rate is unknown to us, but we can observe that the maximum likelyhood estimator and method of moments estimator of a poisson distribution are both the sample average of the process. That is: $\hat{\lambda} = 296/229354$
+
+If the apperance of palindromes is a poisson process, then we would have few leads as to where to search along the stand for abnormal clustering, as the clustering could be reasonably be explained by natural variation.
+
+We want this model to be insufficient, because if it is, we could look for places where more clustering is present than the model would predict and flag them as potential replication sites. 
+
+If palindromes arrive in a poisson process, several things should be true about our data. If any of them are false, it is an indication that unnatural clustering may be occuring.
+
+###The Gamma Distribution
+
+If the palindromes arrive along the DNA by a poisson process, then the waiting times after a hit until the $nth$ subsequent hit is distributed according to the $Gamma(n, \lambda)$ distribution. If they are not, it could be some evidence of unnatural clustering.
+
+###The Uniform Distribution
+
+If the palindromes arrive along the DNA by a poisson process, then if we split the strand of DNA into equal lengths, the distribution of palindromes is uniform amoung those lengths. If they are not, it is evidence of unusual clustering.
+
+###The Poisson Distribution
+
+If the palindromes arrive along the DNA by a poisson process, then if we split the DNA into equal lengths, the distribution of the number of hits in those lengths should be $Poisson(\lambda t)$, where t is the length of one interval. If this is not true, then it could be evidence of unusual clustering.
+
+#Results
+
+##The Gamma Distribution
+
+
+```{r, echo=FALSE}
+len <- length(dat$location) # Number of Palindromes
+len2 <- len-4 # Number of gamma(4,lambda) sojurn times
+
+spacings <- c()# Init
+for (i in 1:len-4){
+  spacings[i] <- dat$location[i+4]-dat$location[i] #get spacings for 4th hit after each palindrome
+}
+
+h <- hist(spacings, ylim = c(0,100), main = "Empirical 4th Waiting Distances vs Theoretical Gamma(4,lambda)", xlab = "# Base Pairs to 4th Palindrome") # Histogram of spacings
+xfit<-seq(min(spacings),max(spacings),length=40) # X values of spacings
+yfit<-dgamma(xfit,shape = 4, rate = (296/229354)) # Theoretical gamma, estimated lambda
+yfit <- yfit*diff(h$mids[1:2])*length(spacings) # Adjust scale of y values
+lines(xfit, yfit, col="blue", lwd=2) # Plot theoretical gamma (4,lambda) dist
+```
+
+
+```{r, echo = FALSE}
+plot(density(spacings), ylim = c(0, 0.00030), main = "Empirical 4th W.D. Density vs Theoretical Gamma(4, Lambda)", xlab = "# Base Pairs to 4th Palindrome", ylab = "Density/100")
+lines(xfit, dgamma(xfit,shape = 4, rate = (296/229354)), col='blue', lwd=2)
+
+```
+
+As we can observe by imposing the $Gamma(4,\lambda)$ distribution on the observed data of 4th occurrence waiting times, the fit is far from perfect. This is some evidence that there is an unusual cluster of palindromes in the data. We can further confirm this with a quantile plot:
+
+```{r, echo = FALSE}
+probabilities = (1:len2)/(len2+1)
+gamma.quantiles = qgamma(probabilities, shape = 4, rate = (296/229354))
+plot(sort(gamma.quantiles), sort(spacings), xlab = 'Theoretical Quantiles from Gamma Distribution', ylab = 'Sample Quantiles of Spacings', main = 'Gamma Quantile-Quantile Plot of Spacings')
+abline(0,1)
+
+```
+
+We observe from the quantile plot that the distribution has longer tails than normal. This means that there exist more short spacings between palindromes than we would normally expect, which is good evidence that an unnatural cluster exists.
+
+##The Uniform Distribution
+
+Here, we split the DNA strand into 12 segments of length 19112. 
+
+```{r, echo=FALSE}
+unif <- data.frame(segment=c(1:12))
+intervals = c(seq(0, 229354, by = 19112))
+
+freq   = hist(dat$location, breaks=intervals, include.lowest=TRUE, plot=FALSE)
+
+unif <- mutate(unif, count=freq$counts)
+unif <- mutate(unif, expected=296/12)
+unif <- mutate(unif, ch_sq_term = (count-expected)^2/expected)
+kable(unif)
+```
+
+Observe that segment 8 is the largest contributor to the Chi-Squared Test Statistic, so there is some evidence that base pairs 133784-152896 may contain the replication site.
+
+The Chi-Squared Goodness of Fit Test statistic:
+
+```{r, echo=FALSE}
+sum(unif$ch_sq_term)
+```
+
+The Degree of Freedom for this test is $12-1-1 = 10$, and for a significance level of 5%, the Chi-Square statistic corresponding to $\alpha$ is $18.31$. Therefore, we fail to reject the null hypothesis that the distribution is uniform. 
+
+```{r, echo=FALSE}
+plot(freq, main="Frequency of Palindromes by Location", xlab = "Location")
+abline(h=24.66, col="blue")
+
+```
+
+Observe that segments 4,5,8, and 11 have an above average number of palindromes and can be considered potential replication sites as well.
+
+##The Poisson Distribution
+
+We split our data now into 60 segments of length 3800. 
+
+```{r, echo=FALSE}
+
+pois_data <- data.frame(segment=c(1:60))
+
+pois_intervals <- c(seq(0,229354, by = 3800))
+
+pois_freq <- hist(dat$location[1:294], breaks=pois_intervals, include.lowest = TRUE, plot = TRUE, main = 'Frequency of Palindromes by Location', xlab='location')
+abline(h=(296*3800/229354), col="blue")
+```
+
+The clustering of palindromes is much more apparent with shorter chosen segments. Segments 25, 52 have many more palindromes than average, so they are possible replication sites. 
+
+```{r, echo=FALSE}
+
+pois_data <- mutate(pois_data, count=pois_freq$counts)
+
+t <- table(pois_data$count)
+t <- as.data.frame(t)
+names(t)[1] <-'ct_Palindromes'
+t <- mutate(t, expected = dpois(as.numeric(ct_Palindromes), lambda = 296*3800/229354)*60)
+kable(t)
+
+```
+
+The probability of the maximum palindrome frequency being 16 or higher given that the data are distributed $Poisson(3800\lambda)$:
+
+```{r, echo=FALSE, warning=FALSE}
+1-(ppois(15, lambda = 296*3800/229354))^60
+```
+
+This is very strong evidence that segment 25, base pairs 91200-95000, is a possible replication site. 
+
+The probability of the maximum palindrome frequency being 12 or higher given that the data are distributed $Poisson(3800\lambda)$:
+```{r, echo=FALSE, warning=FALSE}
+1-(ppois(11, lambda = 296*3800/229354))^60
+```
+
+This is fairly weak evidence that segment 52 is a possible replication site.
+
+To see how well the Poisson distribution in general fits this data, we perform a KS Test:
+
+```{r, echo=FALSE, warning=FALSE}
+ks.test(pois_data$count,"ppois", lambda = 296*3800/229354)
+
+ed <- ecdf(pois_data$count)
+maxdiffidx <- which.max(abs(ed(pois_data$count)-pnorm(pois_data$count)))
+maxdiffat <- pois_data$count[maxdiffidx]
+
+ggplot(pois_data, aes(x=count)) +
+    stat_ecdf() + 
+    stat_function(fun = ppois, args = list(lambda=296*3800/229354), colour = "blue") + geom_vline(xintercept=maxdiffat, lty=2)
+```
+
+At the 5% significance level, we reject the null hypothesis that the data is distributed $Poisson(3800\lambda)$. This is good news, as it means that it is likely that there are unnatural clusters of palindromes in the DNA.
+
+#Discussion
+
+Based on our analysis of the distribution of the palindromes, we can conclude that the Poisson Process does not fully explain the data. This means that an analysis of the distribution of palindromes is likely to yield candidates for the replication site. 
+
+The shape of the distribution of spacings before the 4th palindrome, which we expected to be $Gamma(4,\lambda)$ was not perfectly explained by the distribution. This, along with the tiny likelyhood of getting an interval of 3800 base pairs with 16 palindromes and the low p-value on our KS test suggests that there is unnatural clustering in palindromes. 
+
+However, when our intervals were larger, the distribution of palindromes were adequately explained by the Uniform distribution (We failed to reject that hypothesis). Therefore, there is some evidence that the data could have arisen from a poisson distribution, but the other evidence is compelling towards the conclusion that this is not the case.
+
+
+#Conclusion
+
+Based on our 60 interval Poisson Distribution test, our best candidates for conducting a search for replication sites are base pairs 91200-95000 and base pairs 193800-197600, with very good evidence for the former.
+
+If these two sites do not yield the replication site, there is weak evidence that base pairs 133784-152896 contain the replication site. 

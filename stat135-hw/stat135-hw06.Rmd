@@ -1,0 +1,191 @@
+---
+title: "Homework 6"
+author: "Nicholas Lai"
+date: "April 5, 2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+set.seed(3924052)
+library(asbio)
+library(DescTools)
+library(boot)
+```
+
+## Question 6
+
+
+```{r}
+dat <- read.csv("beeswax.txt")
+plot(ecdf(dat$Hydrocarbon))
+hist(dat$Hydrocarbon)
+qqnorm(dat$Hydrocarbon)
+qqline(dat$Hydrocarbon)
+quantile(dat$Hydrocarbon, probs = c(.9, .75, .50, .25, .10))
+
+waxMean<- mean(dat$Hydrocarbon)
+sd(dat$Hydrocarbon)
+
+waxMean - .99*waxMean+(.01*.85)
+waxMean - .97*waxMean+(.03*.85)
+waxMean - .95*waxMean+(.05*.85)
+
+
+```
+
+## Question 8
+
+```{r}
+curve(sqrt((1/100)*((1-exp(1)^(-x))/exp(1)^(-x))))
+data1 <- rexp(n=100, rate = 1)
+
+y = ecdf(data1)
+
+x=seq(0, 6, by=.01)
+
+plot(log(1-y(x)), type = 'l')
+
+for (i in 1:5){
+data1 <- rexp(n=100, rate = 1)
+
+y = ecdf(data1)
+
+x=seq(0, 6, by=.01)
+
+lines(log(1-y(x)))
+}
+```
+
+## Question 26
+
+```{r}
+dat2 <- read.csv("iridium.txt")
+dat3 <- read.csv("rhodium.txt")
+hist(dat2$X136.6)
+hist(dat3$X126.4)
+
+stem(dat2$X136.6)
+stem(dat3$X126.4)
+
+boxplot(dat2$X136.6)
+boxplot(dat3$X126.4)
+
+plot(dat2$X136.6)
+plot(dat3$X126.4)
+
+mean(dat2$X136.6)
+mean(dat2$X136.6, trim = 0.1)
+mean(dat2$X136.6, trim = 0.2)
+median(dat2$X136.6)
+
+mean(dat3$X126.4)
+mean(dat3$X126.4, trim = 0.1)
+mean(dat3$X126.4, trim = 0.2)
+median(dat3$X126.4)
+
+sd(dat2$X136.6)/sqrt(26)
+sd(dat3$X126.4)/sqrt(39)
+
+mean(dat2$X136.6) + sd(dat2$X136.6)/sqrt(26)
+mean(dat2$X136.6) - sd(dat2$X136.6)/sqrt(26)
+mean(dat3$X126.4) + sd(dat3$X126.4)/sqrt(39)
+mean(dat3$X126.4) - sd(dat3$X126.4)/sqrt(39)
+
+ci.median(dat2$X136.6, .90)
+ci.median(dat3$X126.4, .90)
+```
+
+```{r}
+bootStrap = function(mySample, popSize = NULL, B = 1000, repl = FALSE){
+  if (repl) {
+    # Bootstrap should be done the same way as original sample, usually without rep
+    return(replicate(B, mean(sample(mySample, length(mySample), TRUE))))
+  } else {
+    vals = sort(unique(mySample))
+    counts = table(mySample)
+    # makes the bootstrap pop as rounded version of sample, not quite right
+    bootPop = rep(vals, round(counts * popSize / length(mySample)))
+    return(list(bootPop, 
+                bootSamps = replicate(B,mean(sample(bootPop, length(mySample), FALSE), trim = 0.1)))
+           )
+  }
+}
+
+iridiumTen <- bootStrap(dat2$X136.6, 1300)
+mean(iridiumTen[[2]])
+sd(iridiumTen[[2]])
+hist(iridiumTen[[2]])
+
+rhodiumTen <- bootStrap(dat3$X126.4, 1950)
+mean(rhodiumTen[[2]])
+sd(rhodiumTen[[2]])
+hist(rhodiumTen[[2]])
+
+bootStrap = function(mySample, popSize = NULL, B = 1000, repl = FALSE){
+  if (repl) {
+    # Bootstrap should be done the same way as original sample, usually without rep
+    return(replicate(B, mean(sample(mySample, length(mySample), TRUE))))
+  } else {
+    vals = sort(unique(mySample))
+    counts = table(mySample)
+    # makes the bootstrap pop as rounded version of sample, not quite right
+    bootPop = rep(vals, round(counts * popSize / length(mySample)))
+    return(list(bootPop, 
+                bootSamps = replicate(B,mean(sample(bootPop, length(mySample), FALSE), trim = 0.2)))
+           )
+  }
+}
+iridiumTen <- bootStrap(dat2$X136.6, 1300)
+mean(iridiumTen[[2]])
+sd(iridiumTen[[2]])
+hist(iridiumTen[[2]])
+
+rhodiumTen <- bootStrap(dat3$X126.4, 1950)
+mean(rhodiumTen[[2]])
+sd(rhodiumTen[[2]])
+hist(rhodiumTen[[2]])
+
+bootStrap = function(mySample, popSize = NULL, B = 1000, repl = FALSE){
+  if (repl) {
+    # Bootstrap should be done the same way as original sample, usually without rep
+    return(replicate(B, mean(sample(mySample, length(mySample), TRUE))))
+  } else {
+    vals = sort(unique(mySample))
+    counts = table(mySample)
+    # makes the bootstrap pop as rounded version of sample, not quite right
+    bootPop = rep(vals, round(counts * popSize / length(mySample)))
+    return(list(bootPop, 
+                bootSamps = replicate(B,median(sample(bootPop, length(mySample), FALSE))))
+           )
+  }
+}
+iridiumTen <- bootStrap(dat2$X136.6, 1300)
+mean(iridiumTen[[2]])
+sd(iridiumTen[[2]])
+hist(iridiumTen[[2]])
+
+rhodiumTen <- bootStrap(dat3$X126.4, 1950)
+mean(rhodiumTen[[2]])
+sd(rhodiumTen[[2]])
+hist(rhodiumTen[[2]])
+
+
+
+```
+
+```{r}
+
+
+MeanCI(dat2$X136.6, trim = .1, conf.level = .9)
+MeanCI(dat2$X136.6, trim = .2, conf.level = .9)
+
+MeanCI(dat3$X126.4, trim = .1, conf.level = .9)
+MeanCI(dat3$X126.4, trim = .2, conf.level = .9)
+
+
+
+
+
+
+```

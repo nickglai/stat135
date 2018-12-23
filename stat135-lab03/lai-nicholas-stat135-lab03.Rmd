@@ -1,0 +1,226 @@
+---
+title: "Lab 03 - Dungeness Crabs"
+author: "Nicholas Lai"
+date: "April 30, 2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(dplyr)
+```
+
+## 1. Data Exploration
+
+All sizes are in millimeters.
+
+### crabmolt.csv
+
+presz - Premolt size of the carapace before molting.
+
+postsz - Postmolt size of the carapace after molting.
+
+inc - Increment postmolt-premolt.
+
+year - Collection year (not provided for recaptured crabs).
+
+lf - Source. 1=molted in laboratory; 0=capture-recapture.
+
+### crabpop.csv
+
+size - Postmolt size of the carapace after molting.
+
+shell - Molt classification. 1=clean carapace; 0=fouled carapace.
+
+```{r readinput}
+crabpop <- read.csv('input/crabpop.csv')
+crabmolt <- read.csv('input/crabmolt.csv')
+```
+
+### a). An Interesting Plot - Quantile Plot of Increments
+
+```{r interesting}
+qqnorm(crabmolt$inc, main = 'Normal Q-Q Plot of Increments')
+qqline(crabmolt$inc)
+```
+
+One might expect the difference of pre-molt and post-molt sizes of Dungeness crab to be normally distributed, as a natural assumption might be that the pre-molt and post-molt sizes of crab are normally distributed. But this quantile plot shows that the distribution is not a difference of normal populations, but rather more heavily tailed.
+
+This may suggest that Dungeness crabs have a higher tendency to either grow much faster or slower after molting than would be expected normally.
+
+### b). Summary of one relevant variable - crabmolt$lf
+
+```{r}
+ncapture <- nrow(crabmolt[crabmolt$lf==0,])
+nlab <- nrow(crabmolt) - ncapture
+ncapture
+nlab
+```
+
+The number of wild-caught crabs studied in this dataset number $111$, while the number of lab-raised crabs number $361$. This means that the data disproportionately represents laboratory-studied crabs by a margin of more than $3:1$. If any irregularities that could effect the measurements of the crabs arose during the lab gathering procedure, it could have had an effect on the data and its representativeness of wild crabs, the group of interest.
+
+## 2. Building a Linear Model
+
+We want to predict the premolt size of Dungeness crabs, given postmolt size. Let us consider the population model:
+
+$y_{i}=\beta_{0} + \beta_{1}x_{i} + e_{i}$
+
+where the $x_{i}$s are the postmolt sizes of the Dungeness crabs, and the $y_{i}$s are the premolt sizes of the Dungeness crabs, and $e_{i}$ are $iid$ standard normal error terms.
+
+This gives rise to a linear regression model for prediction, with the idea of minimizing the squared error of the predicted variable, premolt size:
+
+$\hat{y_{i}}=\hat{\beta_{0}} + \hat{\beta_{1}}x_{i}$
+
+$\hat{\beta_{0}}$ can be interpreted as the $y$-intercept of the linear regression model, and $\hat{\beta_{1}}$ can be interpreted as the slope. We can calculate the estimators for these parameters from the data:
+
+```{r regression}
+crablm <- lm(formula = presz ~ postsz, data = crabmolt)
+crablm
+```
+
+## 3. The Linear Model, Visualized
+
+```{r regplot}
+plot(x=crabmolt$postsz, y= crabmolt$presz, main = 'Dungeness Crab: Postmolt versus Premolt Size', xlab = 'Postmolt Size (mm)', ylab = 'Premolt Size (mm)')
+
+abline(a = -25.214, b = 1.073)
+```
+
+## 4. Interpretation of the Linear Model
+
+For every 1mm increase of postmolt size of a Dungeness crab, the linear model predicts a 1.073mm increase in the premolt size of the crab, minus a 25.214 constant negative adjustment.
+
+The percentage of variation of premolt sizes of the Dungeness crab explained by the linear model applied to postmolt sizes is equal to the coefficient of determination, $R^2$. The value is calculated to equal:
+
+$R^2 = \frac{s_{y}^2 - s_{\hat{e}}^2}{s_{y}^2}$
+
+For simplicity, the expression can be rewritten as:
+
+$R^2 = 1 - \frac{s_{\hat{e}}^2}{s_{y}^2}$
+
+```{r rsquared}
+beta0 = -25.214
+beta1 = 1.073
+
+preavg <- mean(crabmolt$presz) #calculating y-bar
+
+pre_sq_sum <- 0
+for (i in 1:length(crabmolt$presz)){
+  pre_sq_sum <- pre_sq_sum + (crabmolt$presz[i]-preavg)^2
+} #calculating total sum of squares
+
+pre_err_sum <- 0
+for (i in 1:length(crabmolt$presz)){
+  pre_err_sum <- pre_err_sum + (crabmolt$presz[i]-(beta0+beta1*crabmolt$postsz[i]))^2
+} #calculating residual sum of squares
+
+1 - pre_err_sum/pre_sq_sum #r-squared calculation
+
+```
+
+The calculated $R^2$ value is about $0.9808$, so about 98% of the variation in premolt sizes is explained by the model.
+
+## 5. Residuals
+
+One consequence of the model we defined in part 2 being true is the homoskedasticity of error. One way to verify this is to plot the residuals:
+
+```{r residuals}
+ crabres = resid(crablm)
+
+ plot(crabmolt$postsz, crabres, 
+     ylab="Residuals", xlab="Post-Molt Size", 
+     main="Residuals - Pre-Molt Size") 
+ abline(0, 0) 
+```
+
+The residuals on the left of the graph seem to vary differently than the residuals on the right, which taken alone seem homoskedastic over their range. This suggest that there are some problems in our model that need to be addressed.
+
+Another way to verify our assumption that error is standard-normally distributed is to view the normal quantile plot of the residuals.
+
+```{r residnorm}
+qqnorm(crabres)
+qqline(crabres)
+```
+
+It is immediately apparent that more values than expected have large residuals, which is evidence that our linear model is problematic without some further refinement.
+
+## 6. Testing for Predictive Value
+
+$H_{0}:\beta_{1} = 0$
+
+$H_{a}:\beta_{1} \neq 0$
+
+$\alpha = 0.05$
+
+Test Statistic: $\frac{\hat{\beta_{1}}}{s_{\hat{\beta_{1}}}}$
+
+Given the null hypothesis, the test statistic is distributed as a $t$-statistic, with $df = n-2 = 470$. As $df\to\infty$, $t_{df} \to$ Standard Normal. Because $n$ is large, we can approximate the $t$-test with a $z$-test with the same test statistic.
+
+The value of the test statistic is:
+
+```{r hypotest}
+n <- length(crabmolt$postsz)
+est_var <- pre_err_sum/(n-2)
+
+var_beta1_hat <- n*est_var/((n*sum(crabmolt$postsz^2))-sum(crabmolt$postsz)^2)
+sd_beta1_hat <- sqrt(var_beta1_hat)
+
+t_test_statistic <- beta1/sd_beta1_hat
+
+t_test_statistic
+```
+
+The critical values for the test are $\pm 1.96$, which our test statistic is well above, so we reject the null hypothesis that $\beta_{1} = 0$. Thus, we reject the implication of the null hypothesis, that the linear model we've created has no predictive value. Note that this conclusion would not change even if a one-tailed test were conducted.
+
+## 7. Excluding Juveniles
+
+To address the problems with our previous model, we can omit the juveniles by excluding data points with premolt sizes of less than 100mm. 
+
+Our new linear regression constants are as follows:
+
+```{r regression2}
+crabmolt_adj <- filter(crabmolt, presz > 100)
+crablm_adj <- lm(formula = presz ~ postsz, data = crabmolt_adj)
+crablm_adj
+
+beta0_adj <- -27.819
+beta1_adj <- 1.091
+```
+
+Note that these coefficients are very similar to the ones found in Part 2,$\hat{\beta_{0}} = -25.214$, $\hat{\beta_{1}} = 1.073$.
+
+The new model predicts that for every 1mm increase in the post-molt size of non-juvenile Dungeness crabs a 1.091mm increase in the pre-molt size of the crabs, minus a 27.819mm constant negative adjustment.
+
+We can use these coefficients to plot a new regression line next to the old one:
+
+```{r regplot2}
+plot(x=crabmolt$postsz, y= crabmolt$presz, main = 'Dungeness Crab: Postmolt versus Premolt Size', xlab = 'Postmolt Size (mm)', ylab = 'Premolt Size (mm)')
+
+abline(a = -25.214, b = 1.073)
+abline(a = beta0_adj, b = beta1_adj, col = "blue")
+```
+
+We see that this line is very close to the regression line that we had before. This makes sense, as from an examination of the residual plot in Part 5, there were very few juveniles in the data to begin with as a proportion of total crabs.
+
+```{r adj_analysis}
+summary(crablm_adj)
+```
+
+From the summary of the regression excluding the juveniles, we see that the $R^2$ value of the new model is $0.9683$, no improvement on the old model. ~96% of the variation in $y$ can be explained by the model on $x$.
+
+## 8. The Model in Practice - 1983 Molting Season
+
+We use the linear model developed in Part 2 to predict the pre-molt shell size of Dungeness crab prior to the 1983 molting season. Below is a numerical summary of the predicted pre-molt shell sizes:
+
+```{r model}
+crabpop <- mutate(crabpop, presize = size*beta1 + beta0)
+summary(crabpop$presize)
+```
+
+This is a histogram of the previous data, seperated by colour into molted and non-molted crabs. Crabs that have molted are observed to have clean, new shells, while the crabs that have not molted are observed to have dirty, fouled shells:
+
+```{r modelhist}
+hist(crabpop$presize, main = "Histogram of Predicted Pre-Molt Size of 1983 Dungeness Crabs", xlab = "Pre-Molt Size (mm)")
+hist(crabpop$presize[crabpop$shell!=1], col="grey", add=TRUE)
+legend("topleft", c("Fouled Carapace", "Clean Carapace"), col=c("grey", "white"), lwd=10)
+```

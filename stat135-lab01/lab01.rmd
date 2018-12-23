@@ -1,0 +1,258 @@
+---
+title: "Lab 1"
+subtitle: "Stat 135"
+author: "Nicholas Lai"
+output: pdf_document
+---
+#Part 1
+
+## 1a
+
+First, Housekeeping:
+```{r}
+load("KaiserBabies.rda")
+#Setting the sample size
+n <- 10
+set.seed(7)
+```
+
+Population size calculations:
+```{r}
+#Extracting the population size, removing na weight vals
+total_obs <- nrow(infants)-sum(is.na(infants$wt))
+total_obs
+```
+
+The sample mean is an unbiased estimator of the population mean, so we will use it to estimate:
+```{r}
+#take a sample of size 10 from the pop.
+mysample <- sample(na.omit(infants$wt), n)
+
+#mean of the sample
+sample_avg<- mean(mysample)
+sample_avg
+```
+
+The estimator of the population standard deviation is as follows:
+```{r}
+#estimator of pop. variance
+st_error <- (var(mysample)/n )*(1-n/total_obs)
+#sqrt to find estimator of st. dev
+st_error <- sqrt(st_error)
+st_error
+```
+
+At the 95% confidence level, the critical values are plus and minus 1.96. Therefore, the boundaries of the interval are: 
+```{r}
+sample_avg+1.96*st_error
+sample_avg-1.96*st_error
+```
+
+##1b
+
+We expect 950/1000 of 1000 intervals calculated this way to contain the population mean, as that is the definition of 95% confident in this context. 
+
+```{r}
+#initialize list of sample means
+sample_means <- c()
+#calculate population average weight of mother
+pop_avg <- mean(na.omit(infants$wt))
+pop_avg
+
+i <- 1
+count <- 0
+for (i in 1:1000){
+  #calculate a confidence interval like above
+  sample <- sample(na.omit(infants$wt), n)
+  sample_avg <- mean(sample)
+  sample_means[i] <- sample_avg
+  st_error <- sqrt((var(sample)/n )*(1-n/total_obs))
+  lower <- sample_avg-1.96*st_error
+  upper <- sample_avg+1.96*st_error
+  #if pop_avg is between the two numbers, count++
+  if (pop_avg<=upper & pop_avg>=lower){
+    count <- count+1
+  }
+}
+# observations in emprical confidence intervals
+count
+```
+
+As we can observe, less than 950. So there may be problems with our method. 
+
+SD of sample averages
+```{r}
+sd(sample_means)
+```
+
+St. Dev is higher than the estimate in part 1a. Not good...
+```{r}
+hist(sample_means)
+qqnorm(sample_means)
+qqline(sample_means)
+```
+
+By the Histogram and the qqplot, we can see that our sample means are left skewed. This breaks the normality assumption in our method (CLT not working well).
+
+#Part 2
+
+##2a
+
+Bootstrap function (thanks hank)
+```{r}
+bootStrap = function(mySample, popSize = NULL, B = 1000, repl = FALSE){
+  if (repl) {
+    # Bootstrap should be done the same way as original sample, usually without rep
+    return(replicate(B, mean(sample(mySample, length(mySample), TRUE))))
+  } else {
+    vals = sort(unique(mySample))
+    counts = table(mySample)
+    # makes the bootstrap pop as rounded version of sample, not quite right
+    bootPop = rep(vals, round(counts * popSize / length(mySample)))
+    return(list(bootPop, 
+                bootSamps = replicate(B,mean(sample(bootPop, length(mySample), FALSE))))
+           )
+  }
+}
+```
+
+The function calculates 1000 sample averages by default, so we can just use that:
+```{r}
+boot <- bootStrap(mysample, 1200)
+length(boot[[1]])
+#sample averages
+length(boot[[2]])
+
+hist(boot[[2]], breaks = 15)
+abline(v=mean(boot[[2]]))
+sd(boot[[2]])
+
+qqnorm(boot[[2]])
+qqline(boot[[2]])
+
+```
+
+The SD is very close to what we had in part 1a. Figures, the bootstrap population is a clone of the original sample, after all. Also, distribution of sample means looks approx normal from hist and qqplot.
+
+#2b
+
+Calculating the  95% interval:
+```{r}
+
+quantile(boot[[2]], c(0.025,.975))
+
+```
+
+Looks VERY similar to the interval calculated in part 1a.
+
+#Part 3
+
+Now, we do everything in part 1, 2 with a sample size of 100. 
+
+```{r}
+n <- 100
+```
+
+The sample mean is an unbiased estimator of the population mean, so we will use it to estimate:
+```{r}
+#take a sample of size 10 from the pop.
+mysample <- sample(na.omit(infants$wt), n)
+
+#mean of the sample
+sample_avg<- mean(mysample)
+sample_avg
+```
+
+The estimator of the population standard deviation is as follows:
+```{r}
+#estimator of pop. variance
+st_error <- (var(mysample)/n )*(1-n/total_obs)
+#sqrt to find estimator of st. dev
+st_error <- sqrt(st_error)
+st_error
+```
+
+At the 95% confidence level, the critical values are plus and minus 1.96. Therefore, the boundaries of the interval are: 
+```{r}
+sample_avg+1.96*st_error
+sample_avg-1.96*st_error
+```
+
+##1b
+
+We expect 950/1000 of 1000 intervals calculated this way to contain the population mean, as that is the definition of 95% confident in this context. 
+
+```{r}
+#initialize list of sample means
+sample_means <- c()
+#calculate population average weight of mother
+pop_avg <- mean(na.omit(infants$wt))
+pop_avg
+
+i <- 1
+count <- 0
+for (i in 1:1000){
+  #calculate a confidence interval like above
+  sample <- sample(na.omit(infants$wt), n)
+  sample_avg <- mean(sample)
+  sample_means[i] <- sample_avg
+  st_error <- sqrt((var(sample)/n )*(1-n/total_obs))
+  lower <- sample_avg-1.96*st_error
+  upper <- sample_avg+1.96*st_error
+  #if pop_avg is between the two numbers, count++
+  if (pop_avg<=upper & pop_avg>=lower){
+    count <- count+1
+  }
+}
+# observations in emprical confidence intervals
+count
+```
+
+As we can observe, very close to 950. This means that there is strong evidence that we can be confident in the methodology of our confidence intervals. 
+
+SD of sample averages
+```{r}
+sd(sample_means)
+```
+
+St. Dev is very close to the estimate in part 1a. Nice!
+```{r}
+hist(sample_means)
+qqnorm(sample_means)
+qqline(sample_means)
+```
+
+By the Histogram and the qqplot, we can see that our sample means are roughly normal, as the data closely follows the theoretical normal quantiles and isn't left or right skewed. This is good evidence that CLT holds for n=100.
+
+#Part 2
+
+##2a
+
+The bootstrap function calculates 1000 sample averages by default, so we can just use that:
+```{r}
+boot <- bootStrap(mysample, 1200)
+length(boot[[1]])
+#sample averages
+length(boot[[2]])
+
+hist(boot[[2]], breaks = 15)
+abline(v=mean(boot[[2]]))
+sd(boot[[2]])
+
+qqnorm(boot[[2]])
+qqline(boot[[2]])
+
+```
+
+The SD is very close to what we had in part 1a. Figures, the bootstrap population is a clone of the original sample, after all. Also, distribution of sample means looks approx normal from hist and qqplot. qqplot shows slight evidence of more extreme values on both tails, if anything to gripe at.
+
+#2b
+
+Calculating the  95% interval:
+```{r}
+
+quantile(boot[[2]], c(0.025,.975))
+
+```
+
+Looks similar to the interval calculated in part 1a.
